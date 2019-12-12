@@ -1,13 +1,16 @@
-import time
 import sys
+import gym
+import time
 import pylab
 import random
 import numpy as np
+import matplotlib
 from collections import deque
 from keras.layers import Dense, Reshape
 from keras.optimizers import Adam
 from keras.models import Sequential
 
+EPISODES = 10000 # max number of episodes
 LOAD = False  # to load model
 TEST = False  # to skip training
 
@@ -29,7 +32,7 @@ class DoubleDQNAgent:
         self.discount_factor = 0.99
         self.learning_rate = 0.0001
         self.epsilon = 1.0
-        self.epsilon_decay = 0.99997
+        self.epsilon_decay = 0.99999
         self.epsilon_min = 0.01
         self.batch_size = 64
         self.train_start = 500
@@ -51,8 +54,8 @@ class DoubleDQNAgent:
     # state is input and Q Value of each action is output of network
     def _build_model(self):
         model = Sequential()
-        model.add(Dense(30, input_dim=self.state_size, activation='relu', kernel_initializer='glorot_uniform'))
-        model.add(Dense(30, activation='relu', kernel_initializer='glorot_uniform'))
+        model.add(Dense(150, input_dim=self.state_size, activation='relu', kernel_initializer='glorot_uniform'))
+        model.add(Dense(150, activation='relu', kernel_initializer='glorot_uniform'))
         model.add(Dense(self.action_size, activation='linear', kernel_initializer='glorot_uniform'))
         model.summary()
         model.compile(loss='mse', optimizer=Adam(lr=self.learning_rate))
@@ -87,8 +90,8 @@ class DoubleDQNAgent:
         batch_size = min(self.batch_size, len(self.memory))
         mini_batch = random.sample(self.memory, batch_size)
 
-        update_input = np.zeros((batch_size, self.state_size[0], self.state_size[1], self.state_size[2]))
-        update_target = np.zeros((batch_size, self.state_size[0], self.state_size[1], self.state_size[2]))
+        update_input = np.zeros((batch_size, self.state_size))
+        update_target = np.zeros((batch_size, self.state_size))
         action, reward, done = [], [], []
 
         for i in range(batch_size):
@@ -106,7 +109,7 @@ class DoubleDQNAgent:
             # like Q Learning, get maximum Q value at s'
             # But from target model
             if done[i]:
-                target[i][0, action[i]] = reward[i]
+                target[i][action[i]] = reward[i]
             else:
                 # the key point of Double DQN
                 # selection of action is from model
@@ -131,8 +134,23 @@ class DoubleDQNAgent:
 if __name__ == "__main__":
     env = gym.make('LunarLander-v2')
 
+    print(env.observation_space.shape[0], env.action_space.n)
+    print(env.observation_space.high, env.observation_space.low)
+
+    '''
+    state:
+    x position
+    y position
+    x velocity
+    y velocity
+    angle
+    angular velocity
+    left leg contacting ground
+    right leg contacting ground
+    '''
+
     # get size of state and action from environment
-    state_size = env.observation_space.n
+    state_size = env.observation_space.shape[0]
     action_size = env.action_space.n
 
     agent = DoubleDQNAgent(state_size, action_size)
@@ -157,10 +175,6 @@ if __name__ == "__main__":
             next_state, reward, done, info = env.step(action)
             next_state = np.reshape(next_state, [1, state_size])
 
-            if state == next_state: # if it tried to go off the map
-                reward += -0.1
-
-
             if not TEST:
                 # save the sample <s, a, r, s'> to the replay memory
                 agent.replay_memory(state, action, reward, next_state, done)
@@ -174,27 +188,28 @@ if __name__ == "__main__":
                 # every episode update the target model to be same with model
                 agent.update_target_model()
 
-                if len(filtered_scores)!=0: # if list is not empty
-                    filtered_scores.append(0.98*filtered_scores[-1] + 0.02*score)
-                else: # if list is empty
-                    filtered_scores.append(score)
+
+                ave_score = np.mean(scores[-min(200, len(scores)):])
+                filtered_scores.append(ave_score)
                 scores.append(score)
                 episodes.append(e)
                 pylab.gcf().clear()
+                pylab.figure(figsize=(12, 8))
                 pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
                 pylab.savefig(agent.save_loc + ".png")
-                print("episode: {:5}   score: {:8.6}   memory length: {:4}   epsilon {:.3}"
-                            .format(e, score, len(agent.memory), agent.epsilon))
+                print("episode: {:5}   score: {:12.6}   memory length: {:4}   epsilon {:.3}"
+                            .format(e, ave_score, len(agent.memory), agent.epsilon))
 
                 # if the mean of scores of last N episodes is bigger than X
                 # stop training
-                if np.mean(scores[-min(100, len(scores)):]) >= 0.99:
+                if ave_score >= 210:
                     agent.save_model()
-                    time.sleep(1)   # Delays for 5 seconds. You can also use a float value.
+                    time.sleep(5)   # Delays for 5 seconds. You can also use a float value.
                     sys.exit()
 
         # save the model every N episodes
         if e % 100 == 0:
+            # TODO: save a copy of the weights
             agent.save_model()
 
     agent.save_model()
