@@ -11,8 +11,6 @@ from keras.optimizers import Adam
 from keras.models import Sequential
 
 EPISODES = 10000 # max number of episodes
-LOAD = False  # to load model
-TEST = False  # to skip training
 
 # this is Double DQN Agent
 # it uses Neural Network to approximate q function
@@ -22,6 +20,7 @@ class DoubleDQNAgent:
         # if you want to see learning, then change to True
         self.render = False
         self.load = False # load an existing model
+        self.evaluate = False
         self.save_loc = './LunarLander_DoubleDQN'
 
         # get size of state and action
@@ -32,7 +31,7 @@ class DoubleDQNAgent:
         self.discount_factor = 0.99
         self.learning_rate = 0.0001
         self.epsilon = 1.0
-        self.epsilon_decay = 0.99999
+        self.epsilon_decay = 0.9999750
         self.epsilon_min = 0.01
         self.batch_size = 64
         self.train_start = 500
@@ -63,11 +62,12 @@ class DoubleDQNAgent:
 
     # after some time interval update the target model to be same with model
     def update_target_model(self):
-        self.target_model.set_weights(self.model.get_weights())
+        if not self.evaluate:
+            self.target_model.set_weights(self.model.get_weights())
 
     # get action from model using epsilon-greedy policy
     def get_action(self, state):
-        if np.random.rand() <= self.epsilon:
+        if np.random.rand() <= self.epsilon and not self.evaluate:
             return np.random.randint(self.action_size)
         else:
             q_value = self.model.predict(state)
@@ -85,7 +85,7 @@ class DoubleDQNAgent:
 
     # pick samples randomly from replay memory (with batch_size)
     def train_replay(self):
-        if len(self.memory) < self.train_start:
+        if len(self.memory) < self.train_start or self.evaluate:
             return
         batch_size = min(self.batch_size, len(self.memory))
         mini_batch = random.sample(self.memory, batch_size)
@@ -129,13 +129,11 @@ class DoubleDQNAgent:
 
     # save the model which is under training
     def save_model(self):
-        self.model.save_weights(self.save_loc + '.h5')
+        if not self.evaluate:
+            self.model.save_weights(self.save_loc + '.h5')
 
 if __name__ == "__main__":
     env = gym.make('LunarLander-v2')
-
-    print(env.observation_space.shape[0], env.action_space.n)
-    print(env.observation_space.high, env.observation_space.low)
 
     '''
     state:
@@ -163,9 +161,6 @@ if __name__ == "__main__":
         state = env.reset()
         state = np.reshape(state, [1, state_size])
 
-        if LOAD:
-            agent.load_model()
-
         while not done:
             if agent.render:
                 env.render()
@@ -175,11 +170,10 @@ if __name__ == "__main__":
             next_state, reward, done, info = env.step(action)
             next_state = np.reshape(next_state, [1, state_size])
 
-            if not TEST:
-                # save the sample <s, a, r, s'> to the replay memory
-                agent.replay_memory(state, action, reward, next_state, done)
-                # every time step do the training
-                agent.train_replay()
+            # save the sample <s, a, r, s'> to the replay memory
+            agent.replay_memory(state, action, reward, next_state, done)
+            # every time step do the training
+            agent.train_replay()
             score += reward
             state = next_state
 
@@ -189,7 +183,7 @@ if __name__ == "__main__":
                 agent.update_target_model()
 
 
-                ave_score = np.mean(scores[-min(200, len(scores)):])
+                ave_score = np.mean(scores[-min(100, len(scores)):])
                 filtered_scores.append(ave_score)
                 scores.append(score)
                 episodes.append(e)
@@ -197,12 +191,13 @@ if __name__ == "__main__":
                 pylab.figure(figsize=(12, 8))
                 pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
                 pylab.savefig(agent.save_loc + ".png")
+                pylab.close()
                 print("episode: {:5}   score: {:12.6}   memory length: {:4}   epsilon {:.3}"
                             .format(e, ave_score, len(agent.memory), agent.epsilon))
 
                 # if the mean of scores of last N episodes is bigger than X
                 # stop training
-                if ave_score >= 210:
+                if ave_score >= 230:
                     agent.save_model()
                     time.sleep(5)   # Delays for 5 seconds. You can also use a float value.
                     sys.exit()
