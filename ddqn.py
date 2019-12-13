@@ -1,5 +1,6 @@
 import sys
 import gym
+import csv
 import time
 import pylab
 import random
@@ -31,7 +32,7 @@ class DoubleDQNAgent:
         self.discount_factor = 0.99
         self.learning_rate = 0.0001
         self.epsilon = 1.0
-        self.epsilon_decay = 0.9999750
+        self.epsilon_decay = 0.999995
         self.epsilon_min = 0.01
         self.batch_size = 64
         self.train_start = 500
@@ -179,9 +180,9 @@ if __name__ == "__main__":
 
             if done:
                 env.reset()
+
                 # every episode update the target model to be same with model
                 agent.update_target_model()
-
 
                 ave_score = np.mean(scores[-min(100, len(scores)):])
                 filtered_scores.append(ave_score)
@@ -197,14 +198,14 @@ if __name__ == "__main__":
 
                 # if the mean of scores of last N episodes is bigger than X
                 # stop training
-                if ave_score >= 230:
+                if ave_score >= 240:
+                    np.savetxt("ddqn.csv", filtered_scores, delimiter=",")
                     agent.save_model()
                     time.sleep(5)   # Delays for 5 seconds. You can also use a float value.
                     sys.exit()
 
         # save the model every N episodes
         if e % 100 == 0:
-            # TODO: save a copy of the weights
             agent.save_model()
 
     agent.save_model()
