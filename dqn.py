@@ -1,5 +1,6 @@
 import sys
 import gym
+import time
 import pylab
 import random
 import numpy as np
