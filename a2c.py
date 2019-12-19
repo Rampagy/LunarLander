@@ -5,8 +5,9 @@ import pylab
 import random
 import numpy as np
 from collections import deque
-from keras.layers import Dense, Dropout
-from keras.models import Sequential
+from keras import backend as K
+from keras.layers import Input, Dense
+from keras.models import Model
 from keras.optimizers import Adam
 
 EPISODES = 100000
@@ -26,15 +27,14 @@ class A2CAgent:
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99
-        self.actor_lr = 0.000001
-        self.critic_lr = 0.00001
+        self.actor_lr = 0.00001
+        self.critic_lr = 0.00005
 
         # create model for policy network
-        self.actor = self.build_actor()
-        self.critic = self.build_critic()
+        self.actor, self.critic, self.policy = self.build_actor_critic()
 
-        self.batch_size = 64
-        self.train_start = 500
+        #self.batch_size = 64
+        #self.train_start = 500
         # create replay memory using deque
         self.memory = deque(maxlen=2000)
 
@@ -43,27 +43,28 @@ class A2CAgent:
 
     # approximate policy and value using Neural Network
     # actor: state is input and probabilities of each action is output of model
-    def build_actor(self):
-        actor = Sequential()
-        actor.add(Dense(50, input_dim=self.state_size, activation='relu', kernel_initializer='he_uniform'))
-        actor.add(Dense(50, activation='relu', kernel_initializer='he_uniform'))
-        actor.add(Dense(50, activation='relu', kernel_initializer='he_uniform'))
-        actor.add(Dense(self.action_size, activation='softmax', kernel_initializer='he_uniform'))
-        actor.summary()
-        # See note regarding crossentropy in reinforce.py
-        actor.compile(loss='categorical_crossentropy',
-                      optimizer=Adam(lr=self.actor_lr))
-        return actor
+    def build_actor_critic(self):
+        input = Input(shape=(self.state_size,))
+        delta = Input(shape=[self.value_size])
+        output1 = Dense(512, activation='relu', kernel_initializer='he_uniform')(input)
+        output2 = Dense(512, activation='relu', kernel_initializer='he_uniform')(output1)
+        value = Dense(self.value_size, activation='linear', kernel_initializer='he_uniform')(output2)
+        output3 = Dense(512, activation='relu', kernel_initializer='glorot_uniform')(output2)
+        probs = Dense(self.action_size, activation='softmax', kernel_initializer='glorot_uniform')(output3)
 
-    # critic: state is input and value of state is output of model
-    def build_critic(self):
-        critic = Sequential()
-        critic.add(Dense(50, input_dim=self.state_size, activation='relu', kernel_initializer='glorot_uniform'))
-        critic.add(Dense(50, activation='relu', kernel_initializer='glorot_uniform'))
-        critic.add(Dense(self.value_size, activation='linear', kernel_initializer='glorot_uniform'))
-        critic.summary()
+        actor = Model(inputs=[input, delta], outputs=probs)
+        critic = Model(inputs=input, outputs=value)
+        policy = Model(inputs=input, outputs=probs)
+
+        def custom_loss(y_true, y_pred):
+            out = K.clip(y_pred, 1e-8, 1-1e-8)
+            log_lik = y_true*K.log(out)
+            return K.sum(-log_lik*delta)
+
+        actor.compile(loss=custom_loss, optimizer=Adam(lr=self.actor_lr))
         critic.compile(loss='mse', optimizer=Adam(lr=self.critic_lr))
-        return critic
+
+        return actor, critic, policy
 
     # save sample <s,a,r,s'> to the replay memory
     def replay_memory(self, state, action, reward, next_state, done):
@@ -71,35 +72,39 @@ class A2CAgent:
 
     # using the output of policy network, pick action stochastically
     def get_action(self, state):
-        policy = self.actor.predict(state, batch_size=1).flatten()
+        policy = self.policy.predict(state, batch_size=1).flatten()
         action = np.random.choice(self.action_size, 1, p=policy)[0]
         return action, policy[action]
 
     # update policy network every episode
     def train_model(self):
-        if len(self.memory) < self.train_start or self.evaluate:
+        if self.evaluate:
             return
-        batch_size = min(self.batch_size, len(self.memory))
-        mini_batch = random.sample(self.memory, batch_size)
+        #batch_size = min(self.batch_size, len(self.memory))
+        #mini_batch = random.sample(self.memory, batch_size)
+
+        batch_size = len(self.memory)
 
         states = np.zeros((batch_size, self.state_size))
         targets = np.zeros((batch_size, self.value_size))
-        advantages = np.zeros((batch_size, self.action_size))
+        advantages = np.zeros(batch_size)
+        actions = np.zeros((batch_size, self.action_size))
 
         for i in range(batch_size):
-            state, action, reward, next_state, done = mini_batch[i]
+            state, action, reward, next_state, done = self.memory[i]
             value = self.critic.predict(state)[0]
             next_value = self.critic.predict(next_state)[0]
 
+            actions[i, action] = 1
             states[i] = state
             if done:
-                advantages[i][action] = reward - value
                 targets[i][0] = reward
+                advantages[i] = targets[i][0] - value
             else:
-                advantages[i][action] = reward + self.discount_factor * (next_value) - value
                 targets[i][0] = reward + self.discount_factor * next_value
+                advantages[i] = targets[i][0] - value
 
-        self.actor.fit(states, advantages, epochs=1, verbose=0)
+        self.actor.fit([states, advantages], actions, epochs=1, verbose=0)
         self.critic.fit(states, targets, epochs=1, verbose=0)
 
     # load the saved model
@@ -154,13 +159,14 @@ if __name__ == "__main__":
             next_state = np.reshape(next_state, [1, state_size])
 
             agent.replay_memory(state, action, reward, next_state, done)
-            agent.train_model()
 
             score += reward
             state = next_state
             probabilities.append(p)
 
             if done:
+                agent.train_model()
+
                 scores.append(score)
                 episodes.append(e)
                 ave_score = np.mean(scores[-min(100, len(scores)):])
@@ -174,6 +180,7 @@ if __name__ == "__main__":
 
                 print("episode: {:5}   score: {:12.6}   memory length: {:4}   p: {:1.2}"
                             .format(e, ave_score, len(agent.memory), np.median(probabilities)))
+                agent.memory.clear()
 
                 # if the mean of scores of last 10 episode is bigger than 490
                 # stop training
