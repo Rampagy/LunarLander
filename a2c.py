@@ -46,10 +46,10 @@ class A2CAgent:
     def build_actor_critic(self):
         input = Input(shape=(self.state_size,))
         delta = Input(shape=[self.value_size])
-        output1 = Dense(512, activation='relu', kernel_initializer='he_uniform')(input)
-        output2 = Dense(512, activation='relu', kernel_initializer='he_uniform')(output1)
+        output1 = Dense(150, activation='relu', kernel_initializer='he_uniform')(input)
+        output2 = Dense(150, activation='relu', kernel_initializer='he_uniform')(output1)
         value = Dense(self.value_size, activation='linear', kernel_initializer='he_uniform')(output2)
-        output3 = Dense(512, activation='relu', kernel_initializer='glorot_uniform')(output2)
+        output3 = Dense(150, activation='relu', kernel_initializer='glorot_uniform')(output2)
         probs = Dense(self.action_size, activation='softmax', kernel_initializer='glorot_uniform')(output3)
 
         actor = Model(inputs=[input, delta], outputs=probs)
