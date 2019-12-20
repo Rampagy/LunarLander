@@ -188,11 +188,11 @@ if __name__ == "__main__":
                 filtered_scores.append(ave_score)
 
                 pylab.gcf().clear()
-                pylab.figure(figsize=(12, 80))
+                pylab.figure(figsize=(12, 8))
                 pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
                 pylab.savefig(agent.save_loc + ".png")
                 pylab.close()
-                
+
                 print("episode: {:5}   score: {:12.6}   memory length: {:4}   epsilon {:.3}"
                             .format(e, ave_score, len(agent.memory), agent.epsilon))
 
