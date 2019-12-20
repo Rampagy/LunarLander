@@ -4,7 +4,9 @@ import csv
 import time
 import pylab
 import numpy as np
-from keras.layers import Dense
+from keras import backend as K
+from keras.models import Model
+from keras.layers import Input, Dense
 from keras.models import Sequential
 from keras.optimizers import Adam
 
@@ -23,13 +25,14 @@ class REINFORCEAgent:
         # get size of state and action
         self.state_size = state_size
         self.action_size = action_size
+        self.value_size = 1
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99
         self.learning_rate = 0.00001
 
         # create model for policy network
-        self.model = self.build_model()
+        self.actor, self.policy = self.build_model()
 
         # lists for the states, actions and rewards
         self.states, self.actions, self.rewards = [], [], []
@@ -40,25 +43,28 @@ class REINFORCEAgent:
     # approximate policy using Neural Network
     # state is input and probability of each action is output of network
     def build_model(self):
-        model = Sequential()
-        model.add(Dense(10, input_dim=self.state_size, activation='relu', kernel_initializer='he_uniform'))
-        model.add(Dense(10, activation='relu', kernel_initializer='he_uniform'))
-        model.add(Dense(self.action_size, activation='softmax', kernel_initializer='he_uniform'))
-        model.summary()
-        # Using categorical crossentropy as a loss is a trick to easily
-        # implement the policy gradient. Categorical cross entropy is defined
-        # H(p, q) = sum(p_i * log(q_i)). For the action taken, a, you set
-        # p_a = advantage. q_a is the output of the policy network, which is
-        # the probability of taking the action a, i.e. policy(s, a).
-        # All other p_i are zero, thus we have H(p, q) = A * log(policy(s, a))
-        model.compile(loss="categorical_crossentropy", optimizer=Adam(lr=self.learning_rate))
-        return model
+        input = Input(shape=(self.state_size,))
+        delta = Input(shape=[self.value_size])
+        output1 = Dense(150, activation='relu', kernel_initializer='he_uniform')(input)
+        output2 = Dense(150, activation='relu', kernel_initializer='he_uniform')(output1)
+        probs = Dense(self.action_size, activation='softmax', kernel_initializer='glorot_uniform')(output2)
+
+        actor = Model(inputs=[input, delta], outputs=probs)
+        policy = Model(inputs=input, outputs=probs)
+
+        def custom_loss(y_true, y_pred):
+            out = K.clip(y_pred, 1e-8, 1-1e-8)
+            log_lik = y_true*K.log(out)
+            return K.sum(-log_lik*delta)
+
+        actor.compile(loss=custom_loss, optimizer=Adam(lr=self.learning_rate))
+        return actor, policy
 
     # using the output of policy network, pick action stochastically
     def get_action(self, state):
-        policy = self.model.predict(state, batch_size=1).flatten()
-        action = np.random.choice(self.action_size, 1, p=policy)[0]
-        return action, policy[action]
+        probs = self.policy.predict(state, batch_size=1).flatten()
+        action = np.random.choice(self.action_size, 1, p=probs)[0]
+        return action, probs[action]
 
     # In Policy Gradient, Q function is not available.
     # Instead agent uses sample returns for evaluating policy
@@ -87,23 +93,25 @@ class REINFORCEAgent:
         discounted_rewards /= np.std(discounted_rewards)
 
         update_inputs = np.zeros((episode_length, self.state_size))
-        advantages = np.zeros((episode_length, self.action_size))
+        advantages = np.zeros(episode_length)
+        actions = np.zeros((episode_length, self.action_size))
 
         for i in range(episode_length):
             update_inputs[i] = self.states[i]
-            advantages[i][self.actions[i]] = discounted_rewards[i]
+            advantages[i] = discounted_rewards[i]
+            actions[i][self.actions[i]] = 1
 
-        self.model.fit(update_inputs, advantages, epochs=1, verbose=0)
+        self.actor.fit([update_inputs, advantages], actions, epochs=1, verbose=0)
         self.states, self.actions, self.rewards = [], [], []
 
     # load the saved model
     def load_model(self):
-        self.model.load_weights(self.save_loc + '.h5')
+        self.actor.load_weights(self.save_loc + '.h5')
 
     # save the model which is under training
     def save_model(self):
         if not self.evaluate:
-            self.model.save_weights(self.save_loc + '.h5')
+            self.actor.save_weights(self.save_loc + '.h5')
 
 if __name__ == "__main__":
     env = gym.make('LunarLander-v2')
@@ -169,7 +177,7 @@ if __name__ == "__main__":
                 pylab.savefig(agent.save_loc + ".png")
                 pylab.close()
                 print('episode: {:5}   score: {:12.6}   p: {:1.2}'
-                            .format(e, score, np.mean(probabilities)))
+                            .format(e, ave_score, np.mean(probabilities)))
 
                 # if the mean of scores of last N episodes is bigger than X
                 # stop training
