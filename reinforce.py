@@ -29,7 +29,7 @@ class REINFORCEAgent:
 
         # These are hyper parameters for the Policy Gradient
         self.discount_factor = 0.99
-        self.learning_rate = 0.00001
+        self.learning_rate = 0.00002
 
         # create model for policy network
         self.actor, self.policy = self.build_model()
@@ -45,8 +45,8 @@ class REINFORCEAgent:
     def build_model(self):
         input = Input(shape=(self.state_size,))
         delta = Input(shape=[self.value_size])
-        output1 = Dense(150, activation='relu', kernel_initializer='he_uniform')(input)
-        output2 = Dense(150, activation='relu', kernel_initializer='he_uniform')(output1)
+        output1 = Dense(300, activation='relu', kernel_initializer='he_uniform')(input)
+        output2 = Dense(300, activation='relu', kernel_initializer='he_uniform')(output1)
         probs = Dense(self.action_size, activation='softmax', kernel_initializer='glorot_uniform')(output2)
 
         actor = Model(inputs=[input, delta], outputs=probs)
@@ -92,16 +92,12 @@ class REINFORCEAgent:
         discounted_rewards -= np.mean(discounted_rewards)
         discounted_rewards /= np.std(discounted_rewards)
 
-        update_inputs = np.zeros((episode_length, self.state_size))
-        advantages = np.zeros(episode_length)
         actions = np.zeros((episode_length, self.action_size))
 
         for i in range(episode_length):
-            update_inputs[i] = self.states[i]
-            advantages[i] = discounted_rewards[i]
             actions[i][self.actions[i]] = 1
 
-        self.actor.fit([update_inputs, advantages], actions, epochs=1, verbose=0)
+        self.actor.fit([np.squeeze(self.states), discounted_rewards], actions, epochs=1, verbose=0)
         self.states, self.actions, self.rewards = [], [], []
 
     # load the saved model
@@ -135,8 +131,9 @@ if __name__ == "__main__":
     # make REINFORCE agent
     agent = REINFORCEAgent(state_size, action_size)
 
-    scores, episodes, filtered_scores = [], [], []
+    scores, episodes, filtered_scores, elapsed_times = [], [], [], []
 
+    start_time = time.time()
     for e in range(EPISODES):
         done = False
         score = 0
@@ -165,6 +162,7 @@ if __name__ == "__main__":
                 agent.train_model()
 
                 # every episode, plot the play time
+                elapsed_times.append(time.time()-start_time)
                 scores.append(score)
                 episodes.append(e)
                 ave_score = np.mean(scores[-min(100, len(scores)):])
@@ -183,6 +181,7 @@ if __name__ == "__main__":
                 # stop training
                 if ave_score >= 240:
                     np.savetxt(agent.save_loc + '.csv', filtered_scores, delimiter=',')
+                    np.savetxt(agent.save_loc + '_time.csv', elapsed_times, delimiter=',')
                     agent.save_model()
                     time.sleep(5)   # Delays for 5 seconds. You can also use a float value.
                     sys.exit()

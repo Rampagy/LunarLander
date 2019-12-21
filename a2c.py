@@ -33,11 +33,6 @@ class A2CAgent:
         # create model for policy network
         self.actor, self.critic, self.policy = self.build_actor_critic()
 
-        #self.batch_size = 64
-        #self.train_start = 500
-        # create replay memory using deque
-        self.memory = deque(maxlen=2000)
-
         if self.load:
             self.load_model()
 
@@ -46,10 +41,10 @@ class A2CAgent:
     def build_actor_critic(self):
         input = Input(shape=(self.state_size,))
         delta = Input(shape=[self.value_size])
-        output1 = Dense(150, activation='relu', kernel_initializer='he_uniform')(input)
-        output2 = Dense(150, activation='relu', kernel_initializer='he_uniform')(output1)
+        output1 = Dense(300, activation='relu', kernel_initializer='he_uniform')(input)
+        output2 = Dense(300, activation='relu', kernel_initializer='he_uniform')(output1)
         value = Dense(self.value_size, activation='linear', kernel_initializer='he_uniform')(output2)
-        output3 = Dense(150, activation='relu', kernel_initializer='glorot_uniform')(output2)
+        output3 = Dense(300, activation='relu', kernel_initializer='glorot_uniform')(output2)
         probs = Dense(self.action_size, activation='softmax', kernel_initializer='glorot_uniform')(output3)
 
         actor = Model(inputs=[input, delta], outputs=probs)
@@ -66,46 +61,29 @@ class A2CAgent:
 
         return actor, critic, policy
 
-    # save sample <s,a,r,s'> to the replay memory
-    def replay_memory(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
-
     # using the output of policy network, pick action stochastically
     def get_action(self, state):
         policy = self.policy.predict(state, batch_size=1).flatten()
         action = np.random.choice(self.action_size, 1, p=policy)[0]
         return action, policy[action]
 
-    # update policy network every episode
-    def train_model(self):
+    def train_model(self, state, action, reward, next_state, done):
         if self.evaluate:
             return
-        #batch_size = min(self.batch_size, len(self.memory))
-        #mini_batch = random.sample(self.memory, batch_size)
 
-        batch_size = len(self.memory)
+        act = np.eye(1, self.action_size, action)
+        value = self.critic.predict(state)
+        next_value = self.critic.predict(next_state)
 
-        states = np.zeros((batch_size, self.state_size))
-        targets = np.zeros((batch_size, self.value_size))
-        advantages = np.zeros(batch_size)
-        actions = np.zeros((batch_size, self.action_size))
+        if done:
+            target = reward
+            advantage = target - value
+        else:
+            target = reward + self.discount_factor * next_value
+            advantage = target - value
 
-        for i in range(batch_size):
-            state, action, reward, next_state, done = self.memory[i]
-            value = self.critic.predict(state)[0]
-            next_value = self.critic.predict(next_state)[0]
-
-            actions[i, action] = 1
-            states[i] = state
-            if done:
-                targets[i][0] = reward
-                advantages[i] = targets[i][0] - value
-            else:
-                targets[i][0] = reward + self.discount_factor * next_value
-                advantages[i] = targets[i][0] - value
-
-        self.actor.fit([states, advantages], actions, epochs=1, verbose=0)
-        self.critic.fit(states, targets, epochs=1, verbose=0)
+        self.actor.fit([state, advantage], act, epochs=1, verbose=0)
+        self.critic.fit(state, [target], epochs=1, verbose=0)
 
     # load the saved model
     def load_model(self):
@@ -141,8 +119,9 @@ if __name__ == "__main__":
     # make A2C agent
     agent = A2CAgent(state_size, action_size)
 
-    scores, episodes, filtered_scores = [], [], []
+    scores, episodes, filtered_scores, elapsed_times = [], [], [], []
 
+    start_time = time.time()
     for e in range(EPISODES):
         done = False
         score = 0
@@ -158,15 +137,14 @@ if __name__ == "__main__":
             next_state, reward, done, info = env.step(action)
             next_state = np.reshape(next_state, [1, state_size])
 
-            agent.replay_memory(state, action, reward, next_state, done)
+            agent.train_model(state, action, reward, next_state, done)
 
             score += reward
             state = next_state
             probabilities.append(p)
 
             if done:
-                agent.train_model()
-
+                elapsed_times.append(time.time()-start_time)
                 scores.append(score)
                 episodes.append(e)
                 ave_score = np.mean(scores[-min(100, len(scores)):])
@@ -178,14 +156,14 @@ if __name__ == "__main__":
                 pylab.savefig(agent.save_loc +  ".png")
                 pylab.close()
 
-                print("episode: {:5}   score: {:12.6}   memory length: {:4}   p: {:1.2}"
-                            .format(e, ave_score, len(agent.memory), np.median(probabilities)))
-                agent.memory.clear()
+                print("episode: {:5}   score: {:12.6}   episode length: {:4}   p: {:1.2}"
+                            .format(e, ave_score, len(probabilities), np.median(probabilities)))
 
                 # if the mean of scores of last 10 episode is bigger than 490
                 # stop training
                 if ave_score > 240:
                     np.savetxt(agent.save_loc + '.csv', filtered_scores, delimiter=",")
+                    np.savetxt(agent.save_loc + '_time.csv', elapsed_times, delimiter=",")
                     agent.save_model()
                     time.sleep(5)
                     sys.exit()
