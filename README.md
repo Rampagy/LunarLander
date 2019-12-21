@@ -37,6 +37,8 @@ The reinforce algorithm was stable, but looked to have be very slow at achieving
 
 ![REINFORCE](LunarLander_Reinforce.png)
 
+![REINFORCE_Example](LunarLander_Reinforce/output.gif)
+
 ## Advantage Actor-Critic (A2C)
 
     python3 a2c.py
@@ -44,6 +46,8 @@ The reinforce algorithm was stable, but looked to have be very slow at achieving
 The advantage actor-critic model worked quite well.  It appeared to have some difficulties in the middle of training but it eventually recovered.  Had I let it train longer I expect it could have reached a significantly higher score.
 
 ![A2C](LunarLander_A2C.png)
+
+![A2C_Example](LunarLander_A2C/output.gif)
 
 ## On Policy Training
 
