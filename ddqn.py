@@ -6,6 +6,7 @@ import pylab
 import random
 import numpy as np
 import matplotlib
+from gym import wrappers
 from collections import deque
 from keras.layers import Dense, Reshape
 from keras.optimizers import Adam
@@ -20,8 +21,9 @@ class DoubleDQNAgent:
     def __init__(self, state_size, action_size):
         # if you want to see learning, then change to True
         self.render = False
-        self.load = False # load an existing model
+        self.load = False
         self.evaluate = False
+        self.record = False
         self.save_loc = './LunarLander_DoubleDQN'
 
         # get size of state and action
@@ -154,6 +156,9 @@ if __name__ == "__main__":
 
     agent = DoubleDQNAgent(state_size, action_size)
 
+    if agent.record:
+        env = wrappers.Monitor(env, agent.save_loc + '/')
+
     scores, episodes, filtered_scores, elapsed_times = [], [], [], []
 
     start_time = time.time()
@@ -189,18 +194,19 @@ if __name__ == "__main__":
                 ave_score = np.mean(scores[-min(100, len(scores)):])
                 filtered_scores.append(ave_score)
 
-                pylab.gcf().clear()
-                pylab.figure(figsize=(12, 8))
-                pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
-                pylab.savefig(agent.save_loc + ".png")
-                pylab.close()
+                if not agent.evaluate:
+                    pylab.gcf().clear()
+                    pylab.figure(figsize=(12, 8))
+                    pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
+                    pylab.savefig(agent.save_loc + ".png")
+                    pylab.close()
 
                 print("episode: {:5}   score: {:12.6}   memory length: {:4}   epsilon {:.3}"
                             .format(e, ave_score, len(agent.memory), agent.epsilon))
 
                 # if the mean of scores of last N episodes is bigger than X
                 # stop training
-                if ave_score >= 240:
+                if ave_score >= 240 and not agent.evaluate:
                     np.savetxt(agent.save_loc + '.csv', filtered_scores, delimiter=",")
                     np.savetxt(agent.save_loc + '_time.csv', elapsed_times, delimiter=",")
                     agent.save_model()

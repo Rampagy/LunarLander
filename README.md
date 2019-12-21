@@ -21,6 +21,8 @@ The deep q-network performed as expected, but took more episodes than I was expe
 
 ![DDQN](LunarLander_DoubleDQN.png)
 
+![DDQN_Example](LunarLander_DoubleDQN/output.gif)
+
 ## Off Policy Comparison
 
 Surprisingly the Deep Q-Network was more stable and trained faster than the 'new and improved' Double Deep Q-Network developed by [DeepMind](https://arxiv.org/pdf/1509.06461.pdf).  It is possible that specifically in LunarLander-v2 the DQN doesn't suffer from overestimations that the DDQN was developed to solve.
