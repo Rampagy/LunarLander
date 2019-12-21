@@ -154,8 +154,9 @@ if __name__ == "__main__":
 
     agent = DoubleDQNAgent(state_size, action_size)
 
-    scores, episodes, filtered_scores = [], [], []
+    scores, episodes, filtered_scores, elapsed_times = [], [], [], []
 
+    start_time = time.time()
     for e in range(EPISODES):
         done = False
         score = 0
@@ -182,6 +183,7 @@ if __name__ == "__main__":
                 # every episode update the target model to be same with model
                 agent.update_target_model()
 
+                elapsed_times.append(time.time()-start_time)
                 scores.append(score)
                 episodes.append(e)
                 ave_score = np.mean(scores[-min(100, len(scores)):])
@@ -200,6 +202,7 @@ if __name__ == "__main__":
                 # stop training
                 if ave_score >= 240:
                     np.savetxt(agent.save_loc + '.csv', filtered_scores, delimiter=",")
+                    np.savetxt(agent.save_loc + '_time.csv', elapsed_times, delimiter=",")
                     agent.save_model()
                     time.sleep(5)   # Delays for 5 seconds. You can also use a float value.
                     sys.exit()

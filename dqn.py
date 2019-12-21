@@ -146,8 +146,9 @@ if __name__ == "__main__":
 
     agent = DQNAgent(state_size, action_size)
 
-    scores, episodes, filtered_scores = [], [], []
+    scores, episodes, filtered_scores, elapsed_times = [], [], [], []
 
+    start_time = time.time()
     for e in range(EPISODES):
         done = False
         score = 0
@@ -175,6 +176,7 @@ if __name__ == "__main__":
                 agent.update_target_model()
 
                 # every episode, plot the play time
+                elapsed_times.append(time.time()-start_time)
                 scores.append(score)
                 episodes.append(e)
                 ave_score = np.mean(scores[-min(100, len(scores)):])
@@ -186,7 +188,7 @@ if __name__ == "__main__":
                 pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
                 pylab.savefig(agent.save_loc + '.png')
                 pylab.close()
-                
+
                 print("episode: {:5}   score: {:12.6}   memory length: {:4}   epsilon {:.3}"
                             .format(e, ave_score, len(agent.memory), agent.epsilon))
 
@@ -194,6 +196,7 @@ if __name__ == "__main__":
                 # stop training
                 if ave_score >= 240:
                     np.savetxt(agent.save_loc + '.csv', filtered_scores, delimiter=",")
+                    np.savetxt(agent.save_loc + '_time.csv', elapsed_times, delimiter=",")
                     agent.save_model()
                     time.sleep(5)   # Delays for 5 seconds. You can also use a float value.
                     sys.exit()
