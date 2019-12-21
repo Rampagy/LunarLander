@@ -11,7 +11,7 @@ from keras.layers import Input, Dense
 from keras.models import Sequential
 from keras.optimizers import Adam
 
-EPISODES = 4 # max number of episodes
+EPISODES = 200000 # max number of episodes
 
 # This is Policy Gradient agent for the Cartpole
 # In this example, we use REINFORCE algorithm which uses monte-carlo update rule
@@ -19,9 +19,9 @@ class REINFORCEAgent:
     def __init__(self, state_size, action_size):
         # if you want to see Cartpole learning, then change to True
         self.render = False
-        self.load = True
-        self.evaluate = True
-        self.record = True
+        self.load = False
+        self.evaluate = False
+        self.record = False
         self.save_loc = './LunarLander_Reinforce'
 
         # get size of state and action
