@@ -54,8 +54,3 @@ The advantage actor-critic model worked quite well.  It appeared to have some di
 When comparing the two I expect that the A2C model had a higher ceiling than the REINFORCE model.  It makes sense that the A2C took longer to train because it had to train both an actor and a critic while the REINFORCE model only had to train a single model.  It also had a larger network to train than the REINFORCE model.
 
 ![On_Overall](on_policy_analysis.png)
-
-
-### Helpers
-
-    for f in ./*.mp4; do echo "file '$f'" >> mylist.txt; -exec sh -c "ffmpeg -f concat -i mylist.txt -c copy output.mp4; ffmpeg -y -i output.mp4 -f gif output.gif" \;

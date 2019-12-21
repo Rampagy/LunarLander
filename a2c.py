@@ -4,6 +4,7 @@ import time
 import pylab
 import random
 import numpy as np
+from gym import wrappers
 from collections import deque
 from keras import backend as K
 from keras.layers import Input, Dense
@@ -18,6 +19,7 @@ class A2CAgent:
         self.render = False
         self.load = False
         self.evaluate = False
+        self.record = False
         self.save_loc = './LunarLander_A2C'
 
         # get size of state and action
@@ -119,6 +121,9 @@ if __name__ == "__main__":
     # make A2C agent
     agent = A2CAgent(state_size, action_size)
 
+    if agent.record:
+        env = wrappers.Monitor(env, agent.save_loc + '/')
+
     scores, episodes, filtered_scores, elapsed_times = [], [], [], []
 
     start_time = time.time()
@@ -150,18 +155,19 @@ if __name__ == "__main__":
                 ave_score = np.mean(scores[-min(100, len(scores)):])
                 filtered_scores.append(ave_score)
 
-                pylab.gcf().clear()
-                pylab.figure(figsize=(12, 8))
-                pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
-                pylab.savefig(agent.save_loc +  ".png")
-                pylab.close()
+                if not agent.evaluate:
+                    pylab.gcf().clear()
+                    pylab.figure(figsize=(12, 8))
+                    pylab.plot(episodes, scores, 'b', episodes, filtered_scores, 'orange')
+                    pylab.savefig(agent.save_loc +  ".png")
+                    pylab.close()
 
                 print("episode: {:5}   score: {:12.6}   episode length: {:4}   p: {:1.2}"
                             .format(e, ave_score, len(probabilities), np.median(probabilities)))
 
                 # if the mean of scores of last 10 episode is bigger than 490
                 # stop training
-                if ave_score > 240:
+                if ave_score > 240 and not agent.evaluate:
                     np.savetxt(agent.save_loc + '.csv', filtered_scores, delimiter=",")
                     np.savetxt(agent.save_loc + '_time.csv', elapsed_times, delimiter=",")
                     agent.save_model()
